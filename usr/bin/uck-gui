@@ -1,0 +1,350 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+function failure_user()
+{
+	failure "Script was cancelled by the user"
+}
+
+function gui_failure()
+{
+	dialog_msgbox "Error" "$@"
+	failure "$@"
+}
+
+############################
+# parsing input parameters #
+############################
+USE_MOUNT=
+WAIT_BEFORE_EXIT=0
+SAVED_ARGS="$@"
+while [ -n "$1" ]; do
+	case "$1" in
+	--wait-before-exit)
+		WAIT_BEFORE_EXIT=1;;
+	-m|--mount)
+		USE_MOUNT=-m;;
+	-*)	echo "Unexpected argument: $1" >&2
+		echo "Usage: $0 [--wait-before-exit] [-m] [remaster_home]" >&2
+		exit 1;;
+	*)	break;;
+	esac
+	shift
+done
+
+REMASTER_HOME=${1:-~/tmp}
+LIVECD_ISO_LOCATION=$REMASTER_HOME/remaster-new-files/livecd.iso
+
+
+if [ -e libraries/gui.sh ]; then
+	SCRIPTS_DIR=`dirname "$0"`
+	LIBRARIES_DIR=$SCRIPTS_DIR/libraries
+else
+	SCRIPTS_DIR=/usr/bin
+	LIBRARIES_DIR=/usr/lib/uck/
+fi
+
+############
+# MESSAGES #
+############
+
+if [ -e VERSION ]; then
+	VERSION=`cat VERSION`
+else
+	VERSION=`cat /usr/lib/uck/VERSION`
+fi
+
+rel="`lsb_release -is` `lsb_release -rs`"
+kernel=`uname -rm`
+
+WELCOME_TEXT=`cat <<EOF
+Welcome to Ubuntu Customization Kit $VERSION!
+(Running on $rel, $kernel)
+
+This tool lets you create Ubuntu live CDs in your language,
+with all the necessary language packs preinstalled.
+It also changes the boot screen to appear in your chosen language.
+
+Requirements:
+1. about 5 GB of free disk space in $HOME/tmp
+   (on local machine and mounted with "dev,suid,exec" options)
+2. Internet access
+
+Homepage: http://uck.sourceforge.net
+Authors: http://uck.sourceforge.net/team
+License: GPL v3
+EOF
+`
+
+RUN_CUSTOMIZATIONS_TEXT=`cat <<EOF
+You will be provided with menu to choose from customization actions when build reaches proper place.
+
+This menu app will be run your Xserver, but with the title "UCK customization menu".
+It will appear when unpacking CD and installing predefined packages is done, so it might take a long time.
+All operations you do there will affect only customized CD.
+You can:
+- Run package manager to add or remove software or repositories (see Note 2 for information about upgrading kernel packages).
+- Run console app for manual customizations in shell.
+- Run predefined customization actions.
+
+When you finish customization, quit the application and building process will proceed.
+
+Note 1: package application will be run after language packs are installed according to previous selections, so you do not have to do this again.
+
+Note 2: upgrading kernel package updates kernel used to run live CD (latest one available will be used). You can remove earlier version using package application, just like any other package.
+
+Note 3: sources.list changes are not propagated to installed system.
+
+Note 4: Simple upgrading system increases CD size, as some other updates might increase size.
+You will probably have to remove something from image to make it fit on CD.
+EOF
+`
+
+PRE_START_TEXT=`cat <<EOF
+All the necessary information has been gathered.
+Building will now start.
+
+Note: You will have to provide your password on the command-line
+
+Your live CD will be created as:
+
+	$LIVECD_ISO_LOCATION
+
+Please fasten your seatbelts and enjoy the ride!
+EOF
+`
+
+BUILD_SUCCESS_TEXT=`cat <<EOF
+Building was successful!
+
+You can find your live CD in:
+
+	$LIVECD_ISO_LOCATION
+
+If you have installed the \"qemu\" package, you can test the image by doing:
+
+	qemu -cdrom $LIVECD_ISO_LOCATION -boot d -m 256
+EOF
+`
+
+BUILD_FAILURE_TEXT=`cat <<EOF
+Building failed.
+
+Please look at $REMASTER_HOME/build.log to see what went wrong.
+
+If you cannot find the problem, please send a support request at:
+
+	https://launchpad.net/products/uck/+addticket
+EOF
+`
+
+#########################
+# EXECUTION STARTS HERE #
+#########################
+
+. $LIBRARIES_DIR/gui.sh
+
+if [ `id -un` = "root" ] ; then
+	gui_failure "UCK GUI should not be run as root, please run again as a normal user. You will be asked for your password when administrator privileges are required."
+fi
+
+dialog_msgbox "Welcome" "$WELCOME_TEXT"
+
+AVAILABLE_LANGUAGE_PACKS=`apt-cache pkgnames language-support | egrep '^language-support-.{2,7}$' | cut -b 18- | sort`
+if [ "$AVAILABLE_LANGUAGE_PACKS" == "" ]; then
+	AVAILABLE_LANGUAGE_PACKS=`apt-cache pkgnames language-pack | egrep '^language-pack-.{2,7}$' | grep -v base | grep -v gnome | grep -v kde | cut -b 15- | sort`
+fi
+
+CD_LANGS=`dialog_multi_choice $'Please choose language packs to install\n(you can choose more than one)' $AVAILABLE_LANGUAGE_PACKS`
+RESULT=$?
+
+if [ $RESULT -ne 0 ] ; then
+	failure_user
+fi
+
+LANGLIST_FILE="$LIBRARIES_DIR/langlist"
+AVAILABLE_BOOT_LANGS=$(cat $LANGLIST_FILE)
+BOOT_CD_LANGS=`dialog_multi_choice $'Please choose which languages will be available at boot of live CD\n(some might not be supported by the specific Ubuntu release you\'re customizing)' $AVAILABLE_BOOT_LANGS`
+RESULT=$?
+
+if [ $RESULT -ne 0 ] ; then
+	failure_user
+fi
+
+if [ "$BOOT_CD_LANGS" == "" ]; then
+	BOOT_CD_LANGS=$AVAILABLE_BOOT_LANGS
+fi
+
+while true; do
+	BOOT_CD_LANG=`dialog_menu $'Please choose which language will be selected by default at boot of live CD' $BOOT_CD_LANGS`
+	RESULT=$?
+	
+	if [ $RESULT -ne 0 ] ; then
+		failure_user
+	fi
+	
+	if [ "$BOOT_CD_LANG" != "" ]; then
+		break
+	fi
+done
+
+if [ -z "$CD_LANGS" ] ; then
+	DESKTOP_TYPES=""
+else
+	DESKTOP_TYPES=`dialog_multi_choice $'Please choose desktop environments which will be present on customized CD\n(you can choose more than one)' unity gnome kde others`
+	if [ "$DESKTOP_TYPES" = "unity" ]; then
+		DESKTOP_TYPES="gnome"
+	fi
+	if [ "$DESKTOP_TYPES" = "others" ]; then
+		DESKTOP_TYPES=""
+	fi
+fi
+
+RESULT=$?
+if [ $RESULT -ne 0 ] ; then
+	failure_user
+fi
+
+while true; do
+	ISO_IMAGE=`dialog_choose_file "Please choose an ISO image to be used as the basis for your live CD."`
+
+	if [ -z "$ISO_IMAGE" ] ; then
+		failure_user
+	fi
+
+	if [ ! -r "$ISO_IMAGE" ] ; then
+		dialog_msgbox "Non-existent file" "File $ISO_IMAGE does not exist"
+		continue
+	fi
+
+	if [ ! -r "$ISO_IMAGE" ] ; then
+		dialog_msgbox "Unreadable file" "File $ISO_IMAGE cannot be read, do you have permissions for this file?"
+		continue
+	fi
+
+	if [ "`isoinfo -p -i \"$ISO_IMAGE\" | grep -i CASPER | wc -l`" = "0" ] ; then
+		dialog_msgbox "Not an Ubuntu Desktop ISO image" "File $ISO_IMAGE is not an Ubuntu Desktop Edition ISO image, alternate CDs can be remastered using backend scripts."
+		continue
+	fi
+	break
+done
+
+while true; do
+	ISO_DESCRIPTION=`dialog_line_input "Please enter the name for your CD (you can leave it blank, 32 chars max)" "Customized Ubuntu live CD" `
+	RESULT=$?
+
+	if [ $RESULT -ne 0 ] ; then
+		failure_user
+	fi
+
+	DESCRIPTION_LEN=`echo "$ISO_DESCRIPTION" | wc -c`
+
+	if [ "$DESCRIPTION_LEN" -gt 32 ]; then
+		dialog_msgbox "ISO description too long" "The description must not be longer than 32 characters (yours is $DESCRIPTION_LEN characters)"
+		continue
+	fi
+	break
+done
+
+RUN_MANUAL_CUSTOMIZATIONS=`dialog_menu "Do you want to customize the CD manually during building (using package utilities, console, etc.)?" yes no`
+if [ $? -ne 0 ] ; then
+	failure_user
+fi
+
+REMOVE_WIN32_FILES=`dialog_menu $'Do you want to delete all windows-related files from the CD?\nThese are files that will appear when you use the CD under Windows (wubi, autorun.inf, etc.)' yes no`
+if [ $? -ne 0 ] ; then
+	failure_user
+fi
+
+HYBRID=`dialog_menu $'Do you want to generate a hybrid image(ISO/USB)' yes no`
+if [ $? -ne 0 ] ; then
+	failure_user
+fi
+
+dialog_msgbox "Ready to build" "$PRE_START_TEXT"
+
+echo "Preparing build environment..."
+if [ ! -e "$REMASTER_HOME" ]; then
+	mkdir "$REMASTER_HOME" || gui_failure "Unable to create $REMASTER_HOME directory"
+fi
+BUILD_DIR=$REMASTER_HOME/customization-scripts
+rm -rf "$BUILD_DIR" || gui_failure "Unable to remove previous build directory ($BUILD_DIR)"
+mkdir $BUILD_DIR || gui_failure "Unable to create $BUILD_DIR directory"
+
+cp -a "$LIBRARIES_DIR"/customization-profiles/localized_cd/* "$BUILD_DIR"/
+cp -a "$LIBRARIES_DIR"/gui.sh "$BUILD_DIR"/
+
+echo "$CD_LANGS" >"$BUILD_DIR"/language_packs
+echo "$BOOT_CD_LANGS" >"$BUILD_DIR"/livecd_locales
+echo "$BOOT_CD_LANG" >"$BUILD_DIR"/livecd_locale
+echo "$DESKTOP_TYPES" >"$BUILD_DIR"/desktop_types
+echo "$ISO_DESCRIPTION" >"$BUILD_DIR"/iso_description
+echo "$RUN_MANUAL_CUSTOMIZATIONS" >"$BUILD_DIR"/run_manual_customizations
+echo "$REMOVE_WIN32_FILES" >"$BUILD_DIR"/remove_win32_files
+echo "$HYBRID" >"$BUILD_DIR"/hybrid
+echo "yes" >"$BUILD_DIR"/clean_desktop_manifest
+
+# Pass proxy variables around sudo to chroot environment
+>"$BUILD_DIR"/environment
+for var in `env | grep -i _proxy`
+do
+	name=`echo "$var" | sed 's/=.*//'`
+	value=`echo "$var" | sed 's/[^=]*=//'`
+	echo "export $name=\"$value\"" >>"$BUILD_DIR"/environment
+done
+
+if [ "$RUN_MANUAL_CUSTOMIZATIONS" = "yes" ] ; then
+	echo "Creating X authentication cookie..."
+	xauth extract - $DISPLAY > "$BUILD_DIR"/Xcookie || failure "Cannot create Xauthentication cookie in $BUILD_DIR/Xcookie, error=$?"
+fi
+
+echo "Running build process..."
+(
+echo "Build ($0 $SAVED_ARGS) started at `date +'%Y-%m-%d %H:%M:%S'`"
+export UCK_USERNAME="$USER"
+sudo bash "$SCRIPTS_DIR"/uck-remaster $USE_MOUNT "$ISO_IMAGE" "$BUILD_DIR" "$REMASTER_HOME"
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+	dialog_msgbox "Build failure" "$BUILD_FAILURE_TEXT"
+else
+	dialog_msgbox "Build success" "$BUILD_SUCCESS_TEXT"
+
+	MAX_CD_700MB_SIZE=737280000 #From http://en.wikipedia.org/wiki/CD-ROM
+
+	ISO_SIZE=`stat --format='%s' "$LIVECD_ISO_LOCATION"`
+
+	if [ $ISO_SIZE -ge $MAX_CD_700MB_SIZE ] ; then
+		dialog_msgbox "ISO too big" "Warning: ISO image might be too big to fit on 700MB CD-ROM"
+	fi
+fi
+echo "Build ended at `date +'%Y-%m-%d %H:%M:%S'`"
+) 2>&1 | tee -a $REMASTER_HOME/build.log
+
+if [ $WAIT_BEFORE_EXIT = 1 ] ; then
+  echo -n "Press ENTER to close the terminal"
+  read FAKE_EXIT_CHECK
+fi

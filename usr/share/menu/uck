@@ -1,0 +1,6 @@
+?package(uck): needs="X11"\
+ section="Applications/System/Administration"\
+ title="UCK"\
+ longtitle="Ubuntu Customization Kit"\
+ command="/usr/bin/uck-gui --wait-before-exit"\
+ icon="/usr/share/pixmaps/uck.xpm"

@@ -1,0 +1,84 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+REMASTER_HOME="$1"
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 [remaster-dir]"
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+
+if [ -z "$REMASTER_HOME" ]; then
+	REMASTER_HOME=~/tmp
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null ||
+	. /usr/lib/uck/remaster-live-cd.sh 2>/dev/null ||
+	failure "libraries not found"
+
+INITRD_REMASTER_DIR="$REMASTER_HOME/remaster-initrd"
+ISO_REMASTER_DIR="$REMASTER_HOME/remaster-iso"
+REMASTER_DIR="$REMASTER_HOME/remaster-root"
+
+# If the r/w mount methods exist run them first.
+[ -x /usr/bin/uck-remaster-umount ] &&
+	uck-remaster-umount "$REMASTER_HOME"
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_initrd_extraction" ] ; then
+	remove_remaster_initrd
+fi
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_rootfs_extraction" ] ; then
+	remove_remaster_dir
+fi
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_iso_extraction" ] ; then
+	remove_iso_remaster_dir
+fi
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_iso_cache" ] ; then
+	sudo rm -rf "$REMASTER_HOME/remaster-iso-cache"
+fi
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_rootfs_cache" ] ; then
+	sudo rm -rf "$REMASTER_HOME/remaster-root-cache"
+fi
+
+if [ ! -e "$REMASTER_HOME/customization-scripts/keep_root_home" ] ; then
+	sudo rm -rf "$REMASTER_HOME/remaster-root-home"
+fi

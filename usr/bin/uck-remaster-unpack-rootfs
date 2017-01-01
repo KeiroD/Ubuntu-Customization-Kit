@@ -1,0 +1,86 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 [-m] [remaster-dir]"
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+use_mount=false
+if [ x"$1" = x-m ]; then
+	use_mount=true; shift
+fi
+
+REMASTER_HOME="$1"
+
+if [ -z "$REMASTER_HOME" ]; then
+	REMASTER_HOME=~/tmp
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null ||
+	. /usr/lib/uck/remaster-live-cd.sh 2>/dev/null ||
+	failure "libraries not found"
+
+SQUASHFS_MOUNT_DIR="$REMASTER_HOME/remaster-root-mount"
+SQUASHFS_IMAGE="$REMASTER_HOME/remaster-iso/casper/filesystem.squashfs"
+REMASTER_DIR="$REMASTER_HOME/remaster-root"
+
+# Check for previous use of union mounts and implicitly turn on -m iff found
+if [ -d "$REMASTER_DIR"-cache ]; then
+	use_mount=true
+fi
+
+if [ $use_mount = true ] && check_union_mounts; then
+	# Mount r/W copy of rootfs on iso
+	if mountpoint "$REMASTER_DIR"; then
+		: do nothing - is already mounted
+	else
+		union_mount "$SQUASHFS_IMAGE" "$REMASTER_DIR" ||
+			failure "Can't union_mount $REMASTER_DIR"
+	fi
+	# Prevent immediate unmount by cleanup code
+	trap : EXIT
+else
+	if [ $use_mount = true ]; then
+		echo "Cannot use union mounts - using copy instead!"
+		use_mount=false
+	fi
+	remove_remaster_dir
+	mount_squashfs
+	unpack_rootfs
+	unmount_squashfs
+fi

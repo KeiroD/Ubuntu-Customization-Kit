@@ -1,0 +1,157 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+  <title>UCK- Ubuntu Customization Kit</title>
+</head>
+<body>
+<h1>First Things to Know</h1>
+
+<h2>What is this all about?</h2>
+UCK (Ubuntu Customization Kit) is a tool used to customize Ubuntu CD's.
+<p>
+It consists of a set of shell procedures used to perform customization steps
+and two graphical user interfaces (GUIs) (also written as shell procedure) that
+can be used to perform modifications (i.e. booting, installing and running the
+Live System in a language different from English; adding or deleting software
+to create a customized CD).
+<p>
+The wizard GUI is the easiest to use and interactive, but geared towards
+one-time customization. For novice users who "Just need to get the language
+right and add some stuff" and who only need to do this infrequently this GUI
+will guide you through the most common customization tasks.
+<p>
+The UCK command line interface has few restrictions. The commands provided do
+all the "hard stuff" and a seasoned programmer can use them as building blocks
+to create a completely customized distribution from almost any media and
+version distributed by Canonical or others.
+<p>
+UCK-FLOW (Ubuntu Customization Kit Workflow Tool) is an alternative graphical
+user interface for the Ubuntu Customization Kit. In contrast to UCK GUI, which
+is tuned to allow easy execution of common customizations, uck-flow provides a
+fine grained control over each of the customization steps. It has templates for
+some of the most common customizations, can easily be extended with more
+templates and allows (re-)execution of arbitrary customization steps.
+<p>
+UCK-FLOW with "interactive" or "localized" or "updated" templates can be used
+instead of UCK GUI by intermediate users for multiple (re-)customizations.
+Advanced uses will require (shell-) programming skills for full customization.
+
+<h2>I've installed UCK, now what?</h2>
+You will find UCK-GUI (the easy-to-use graphical user interface) in
+<pre>
+	Menu / System Tools / Ubuntu Customization Kit
+</pre>
+or you can launch the UCK gui by typing:<pre>uck-gui</pre> in a terminal.
+<p>
+The GUI will guide you through the most common customization tasks.</p>
+
+<h2>How do I call the alternative GUI?</h2>
+You will find UCK-FLOW (the tool for repeated customizations) in
+<pre>
+	Menu / System Tools / Ubuntu Customization Kit Workflow Tool
+</pre>
+or you can lauch uck-flow by typing:<pre>usk-flow</pre> in a terminal.
+<h2>How does it work?</h2>
+The basic work flow defined by the UCK toolset consists of 13 steps:
+<ol>
+<li>Get an Ubuntu CD or ISO image. (uck-flow: Prepare ISO File)
+<li>(UCK) Extract the contents of an Ubuntu CD or ISO image. (uck-flow: Unpack ISO File)
+<li>(UCK) Extract the compressed root file system image. (uck-flow: Unpack Root Filesystem)
+<li>Modify the root file system image in a chrooted environment. (uck-flow: Customize Root Filesystem)
+<li>Complete root file system image customization outside of chroot. (uck-flow: Finalize Root Filesystem)
+<li>(UCK) Re-compress the root file system image. (uck-flow: Pack Root Filesystem)
+<li>Modify other parts of the ISO image. (uck-flow: Customize ISO Image)
+<li>(Optional) (UCK) Extract the contents of the initial RAM disk. (uck-flow: Unpack INITRD)
+<li>(Optional) Modify the initial RAM disk. (uck-flow: Customize INITRD)
+<li>(Optional) (UCK) Re-compress the initial RAM disk. (uck-flow: Pack INITRD)
+<li>(UCK) Re-assemble the ISO image. (uck-flow: Pack ISO File)
+<li>Test/burn CD/... (uck-flow: Test/Deliver)
+<li>(UCK) Cleanup. (uck-flow: Cleanup)
+</ol>
+The steps marked with (UCK) above directly map onto UCK supplied commands, the
+steps marked (Optional) above become mandatory if a new version of the Linux
+kernel is to be used on the generated ISO or if the initial boot environment
+of the Live CD/DVD needs to be customized, all other steps are user definable
+actions, posssibly supported by some UCK command.
+<h2>What are the prerequisites for running UCK?</h2>
+You will need a fairly recent working Ubuntu installation of the same
+architecture as the Live CD image you want to customize (cf. the FAQ
+on Limitations / Caveats) on either a virtual machine or a workstation with
+a sufficently large disk.
+<p>
+The machine you run UCK on should have a direct connection to the
+Internet if you want to update packages or add a language. If you can
+only access the Internet via proxies, you (currently) will need to modify
+some of the scripts yourself.
+<p>
+You will need to have root access on the machine you perform the
+customizations on.
+<p>
+Although it may be possible to run UCK on other distributions, this
+is not a well supported setup.
+<h2>What are known limitations and caveats when using UCK?</h2>
+UCK currently requires root privileges for many of the steps. You need to be
+able to run sudo (fakeroot will not suffice!) on the machine that you
+want to perform customization on. It is generally not a good idea to
+run UCK on a server that must be available for production purposes.
+It's way better to use a private workstation with no valuable data or
+a virtual machine as host.
+<P> 
+<b>*** You have been warned! ***</b>
+<P>
+UCK performs customization of the root file system by running commands
+(apt-get install et.al.) as root in a chroot environment. This implies that:
+<ol>
+<li>You generally cannot customize Live CD images for machine
+        architectures different from the one you run UCK on, e.g.
+        customizing an image for ARM processors will not be possible
+        if your machine is x86 based. One exception to this rule is that
+        you can customize x86 images on an x86_64 host because 32bit
+        binaries can be run on 64bit Linux systems - the reverse (i.e.
+        customizing a 64bit system on a 32bit host) is not possible.
+
+    <li>Some commands may not work in the chroot environment, especially
+         if they require services that can only be run once on a system.
+
+    <li>While installing/removing packages in the chroot environment,
+         services may be stopped/started by the packaging scripts. You will
+         need to take care that these services (a) do not collide with
+         services running on the customization host and (b) that they
+         get terminated near the end of the root file system customization
+         because otherwise it may be impossible to successfully finish
+         the customization.
+
+     <li>Even though commands run in a chroot environment they run with
+          full root privileges. It is therefore possible that the hosting
+          system is corrupted by commands going astray, e.g. if the date
+          command is run to set the date/time in the chrooted environment
+          the date/time of the hosting environment will be affected. Even
+          worse: Should a command create a device node that represents a
+          device in the hosting system and then decide to format that device
+          (or to install a bootloader someplace) the hosting system will
+          be unusable afterwards.
+</ol>
+There are known problems with placing the directories the customization
+is done in (usually ~/tmp) on encrypted file systems and it doesn't really
+make a lot of sense either - after all you are modifying open source software
+that is freely available on the Net ;-)
+<p>
+Placing the customization directory on a network drive may be possible.
+<h2>Before submitting a bug report</h2>
+If you have problems with UCK please check for a newer release in our PPA at https://launchpad.net/~uck-team/+archive/uck-stable before submitting a bug report.
+<p>
+Frequently last minute changes to new Ubuntu releases break UCK and we'd rather spend our time adding features and resolving real issues than to act on bug reports for bugs already fixed.
+<p>
+When you submit a bug report, please make sure to include the following information:
+<ul>
+<li>Version of Ubuntu you are running on (output of lsb_release -irs)
+<li>Kernel architecture of host system (output of uname -rm)
+<li>Version of Ubuntu you are trying to customize
+<li>Kernel architecture of the version you are trying to customize
+</ul>
+When submitting a bug report the build.log file is substantial for us to find bugs quickly. As the build log tends tpo be rather big please do not paste it into the bug report, but add it as an attachment.
+<p>
+It also does not hurt if you use the extended search to look through bugs that have already been fixed and maybe scan the answer section for the problem you are having ;-)
+</body>
+</html>

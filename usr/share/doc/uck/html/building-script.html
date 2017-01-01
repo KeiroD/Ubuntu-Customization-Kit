@@ -1,0 +1,211 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+  <title>UCK - documentation of building script</title>
+</head>
+<body>
+
+<h1>Ubuntu Customization Kit</h1>
+
+<h2>Documentation for building script</h2>
+
+<h3>Introduction</h3>
+
+Live CD building script (<span style="font-style: italic;">./remaster-live-cd</span>)
+is used to build live CD image automatically.<br>
+
+It provides means to customize live CD image in many ways:<br>
+
+<ul>
+
+  <li>Customization of root filesystem (squashFS) contents
+through installation or removal of packages or any other scriptable
+changes.</li>
+
+  <li>Customization of ISO image.</li>
+  <li>Customization of initrd image.</li>
+
+</ul>
+
+<h3>Invocation</h3>
+
+Building script should be invoked in such way:<span style="font-style: italic;"><br>
+
+./remaster-live-cd path-to-iso-file.iso customization-dir/</span><br>
+
+<div style="margin-left: 40px;"><span style="font-style: italic;"></span></div>
+
+Parameters:<br>
+
+<ul>
+
+  <li><span style="font-style: italic;">path-to-iso-file.iso</span>
+- path to file with image of Ubuntu Live CD which will be used as a
+base for building customized live CD image. It can be any image from
+Ubuntu family - Ubuntu, Kubuntu, Edubuntu or Xubuntu.</li>
+
+  <li><span style="font-style: italic;">customization-dir/</span>
+- path to directory containing customization scripts</li>
+
+</ul>
+
+<h3>Customization directory</h3>
+
+Customization directory can contain the following files:<br>
+
+<ul>
+
+  <li><span style="font-style: italic;">customize</span>
+- script for customization of root filesystem. See <a href="#script-customize">customize script description</a>.</li>
+
+  <li><span style="font-style: italic;">customize_initrd</span>
+- script for customization of initrd. See <a href="#script-customize_initrd">customize_initrd script
+description</a>.</li>
+
+  <li><span style="font-style: italic;">customize_iso</span>
+- script for customization of ISO image. See <a href="#script-customize_iso">customize_iso script description</a>.</li>
+
+  <li><span style="font-style: italic;">rootfs.sort</span>
+- sort file used for sorting files in SquashFS. See "man mksquashfs"
+option -sort.</li>
+
+  <li><span style="font-style: italic;">iso_description</span>
+- Title of ISO image.</li>
+
+  <li><span style="font-style: italic;">run_manual_customizations</span>
+- Tells the system that you want to do advanced customizations within the rootfs.
+This will stop the remastering process at a certain point and raise a menu, you'll
+be able to choose if you want to open a terminal or run a package manager, all
+within the rootfs.</li>
+
+  <li><span style="font-style: italic;">mkisofs_extra_options</span>
+- Extra options passed to mkisofs command. Note that these options
+cannot contain strings with quotes (") as they are passed to mkisofs
+commandline.</li>
+
+  <li><span style="font-style: italic;">keep_initrd_extraction</span>
+- If this file is present the extracted initrd won't be deleted
+after processing.</li>
+
+  <li><span style="font-style: italic;">keep_rootfs_extraction</span>
+- If this file is present the extracted rootfs won't be deleted
+after processing.</li>
+
+  <li><span style="font-style: italic;">keep_iso_extraction</span>
+- If this file is present the extracted ISO won't be deleted
+after processing.</li>
+
+</ul>
+
+<span style="font-style: italic;"></span>
+<h4><a name="script-customize"></a>Script <span style="font-style: italic;">customize</span></h4>
+
+If this script is present, SquashFS root filesystem is unpacked, script
+is run and filesystem image repacked after customization.<br>
+
+<span style="font-weight: bold;">Note</span>:
+Packing (compressing) SquashFS filesystem is long and CPU-intensive
+task. Do not include this script in customization directory if you are
+not modifying contents of root filesystem.<br>
+
+<br>
+
+This script is run in chrooted environment in directory of live CD root
+filesystem.<br>
+
+Due to this fact, there is no <span style="text-decoration: underline;">access to files outside
+of live CD root filesystem</span>.<br>
+
+However, the whole contents of customization directory is copied to
+chroot environment, so it is accessible.<br>
+
+<br>
+
+In this script, it is possible to use any commands, like in normal
+Ubuntu system.<br>
+
+In particular:<br>
+
+<ul>
+
+  <li>You can use "<span style="font-style: italic;">apt-get
+install package-name</span>" to install packages. All standard
+repositories (as enabled on CD) are available.&nbsp;</li>
+
+  <li>You can use "<span style="font-style: italic;">apt-get
+remove package-name</span>" to remove unnecessary packages.</li>
+
+  <li>You can use <span style="font-style: italic;">cp</span>,
+    <span style="font-style: italic;">mv</span>, <span style="font-style: italic;">sed</span>, etc. to modify
+contents of files on CD.</li>
+
+</ul>
+
+Note: After script is run, temporary directories contents (in
+particular <span style="font-style: italic;">/tmp</span>)
+is purged before building CD.<br>
+
+<br>
+
+For examples of usage of script see <span style="font-style: italic;">customize-dir-examples/</span>
+subdirectories.<br>
+
+<h4><a name="script-customize_initrd"></a>Script
+<span style="font-style: italic;">customize_initrd</span></h4>
+
+If this script is present, initrd (initial ramdisk) image is unpacked,
+script is run and initrd image is repacked after customization.<br>
+
+<br>
+
+Initrd contains kernel modules and scripts used right after boot of
+Linux kernel to locate and mount root filesystem.<br>
+
+You can exchange these modules/scripts with your customized versions or
+you can add some modules, for example to support some exotic hardware
+during boot.<br>
+
+<br>
+
+This script is run in context of your system.<br>
+
+Location of initrd image directory is passed in&nbsp;<span style="font-style: italic;">INITRD_REMASTER_DIR</span>
+environment variable.<br>
+
+In Bash scripts you can use $INITRD_REMASTER_DIR to access it.<br>
+
+<br>
+
+For examples of usage of script see <span style="font-style: italic;">customize-dir-examples/</span>
+subdirectories.<br>
+
+<h4><a name="script-customize_iso"></a>Script <span style="font-style: italic;">customize_iso</span></h4>
+
+If this script is present, it is run before repacking ISO image in
+order to customize contents of image.<br>
+
+You can add or remove files on CD, for example add some documentation,
+tools needed to boot CD, etc.<br>
+
+<br>
+
+This script is run in context of your system.<br>
+
+Location of initrd image directory is passed in <span style="font-style: italic;">ISO_REMASTER_DIR</span>
+environment variable.<br>
+
+In Bash scripts you can use $ISO_REMASTER_DIR to access it.<br>
+
+<br>
+
+For examples of usage of script see <span style="font-style: italic;">customize-dir-examples/</span>
+subdirectories.<br>
+
+<br>
+
+<hr>
+Updated for UCK v1.1, June 22nd 2006.<br>
+
+</body>
+</html>

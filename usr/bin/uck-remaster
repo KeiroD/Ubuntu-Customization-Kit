@@ -1,0 +1,232 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+##################
+# some functions #
+##################
+
+function usage()
+{
+	echo "Usage: $0 [-m] iso-file.iso [customization-scripts-dir] [remaster-home]"
+}
+
+function check_exit_code()
+{
+	RESULT=$?
+	if [ "$RESULT" -ne 0 ]; then
+		if [ x"$use_mount" = x-m ]; then
+			$SCRIPTS_DIR/uck-remaster-umount "$REMASTER_HOME"
+		fi
+		exit "$RESULT"
+	fi
+}
+
+function check_if_user_is_root()
+{
+	if [ `id -un` != "root" ]; then
+		echo "You need root privileges"
+		exit 2
+	fi
+}
+
+#########################
+# input parameter check #
+#########################
+use_mount=
+if [ x"$1" = x-m ]; then
+	use_mount=-m; shift
+fi
+
+ISO_IMAGE="$1"
+CUSTOMIZE_DIR="$2"
+REMASTER_HOME=${3:-~/tmp}
+
+if [ -z "$ISO_IMAGE" ]; then
+	usage
+	exit 1
+fi
+
+COPY_CUSTOMIZE_DIR="yes"
+if [ -z "$CUSTOMIZE_DIR" -o -d "$REMASTER_HOME/customization-scripts" ]; then
+	COPY_CUSTOMIZE_DIR="no"
+	CUSTOMIZE_DIR="$REMASTER_HOME/customization-scripts"
+fi
+
+########
+# main #
+########
+
+check_if_user_is_root
+
+if [ -e libraries/remaster-live-cd.sh ]; then
+	SCRIPTS_DIR=`dirname "$0"`
+	VERSION=`cat VERSION`
+else
+	SCRIPTS_DIR=/usr/bin
+	VERSION=`cat /usr/lib/uck/VERSION`
+fi
+
+# Some information of the hosting system
+rel="`lsb_release -is` `lsb_release -rs`"
+kernel=`uname -rm`
+echo ">> Ubuntu Customization Kit $VERSION on $rel, $kernel"
+echo "Starting CD remastering on " `date`
+echo "Customization dir=$CUSTOMIZE_DIR"
+
+CUSTOMIZE_ROOTFS="no"
+CUSTOMIZE_INITRD="no"
+CUSTOMIZE_ISO="no"
+REMOVE_WIN32_FILES="no"
+CLEAN_DESKTOP_MANIFEST="no"
+HYBRID="no"
+
+if [ "$COPY_CUSTOMIZE_DIR" = "yes" ] && [ -e "$REMASTER_HOME/customization-scripts" ]; then
+	echo "\"customization-scripts\" directory already exists inside $REMASTER_HOME, remove it and run uck-remaster again"
+	exit 2
+fi
+
+if [ -e "$CUSTOMIZE_DIR/remove_win32_files" ]; then
+	REMOVE_WIN32_FILES=`cat "$CUSTOMIZE_DIR/remove_win32_files"`
+fi
+
+if [ -e "$CUSTOMIZE_DIR/customize" ]; then
+	CUSTOMIZE_ROOTFS="yes"
+fi
+
+if [ -e "$CUSTOMIZE_DIR/customize_initrd" ]; then
+	CUSTOMIZE_INITRD="yes"
+fi
+
+if [ -e "$CUSTOMIZE_DIR/customize_iso" ]; then
+	CUSTOMIZE_ISO="yes"
+fi
+
+if [ -e "$CUSTOMIZE_DIR/clean_desktop_manifest" ]; then
+	CLEAN_DESKTOP_MANIFEST="yes"
+fi
+
+if [ -e "$CUSTOMIZE_DIR/hybrid" ]; then
+	HYBRID="yes"
+fi
+
+$SCRIPTS_DIR/uck-remaster-clean "$REMASTER_HOME"
+check_exit_code
+
+#############
+# unpacking #
+#############
+
+if [ "$CUSTOMIZE_ISO" = "yes" ] ; then
+	$SCRIPTS_DIR/uck-remaster-unpack-iso $use_mount "$ISO_IMAGE" "$REMASTER_HOME"
+	check_exit_code
+fi
+
+if [ "$CUSTOMIZE_ISO" = "yes" ] && [ "$CUSTOMIZE_ROOTFS" = "yes" ] ; then
+	$SCRIPTS_DIR/uck-remaster-unpack-rootfs $use_mount "$REMASTER_HOME"
+	check_exit_code
+fi
+
+###############
+# customizing #
+###############
+
+if [ "$REMOVE_WIN32_FILES" = "yes" ]; then
+	"$SCRIPTS_DIR/uck-remaster-remove-win32-files" "$REMASTER_HOME"
+	check_exit_code
+fi
+
+if [ "$CUSTOMIZE_ISO" = "yes" ] && [ "$CUSTOMIZE_ROOTFS" = "yes" ]; then
+	if [ "$COPY_CUSTOMIZE_DIR" = "yes" ]; then
+		cp -a "$CUSTOMIZE_DIR" "$REMASTER_HOME/customization-scripts"
+		check_exit_code
+	fi
+	
+	$SCRIPTS_DIR/uck-remaster-chroot-rootfs "$REMASTER_HOME" "/tmp/customization-scripts/customize"
+	check_exit_code
+fi
+
+if [ "$CUSTOMIZE_ISO" = "yes" ] ; then
+	echo "Running ISO customization script $CUSTOMIZE_DIR/customize_iso..."
+	"$CUSTOMIZE_DIR/customize_iso" "$REMASTER_HOME"
+	check_exit_code
+	echo "ISO customization script finished"
+fi
+
+if [ "$MANUAL_CUSTOMIZATION_PAUSE" = "yes" ] ; then
+	echo "Pausing for manual customization, press Enter when finished..."
+	read DUMMY
+fi
+
+if [ "$CUSTOMIZE_INITRD" = "yes" ] ; then
+	$SCRIPTS_DIR/uck-remaster-unpack-initrd "$REMASTER_HOME"
+	check_exit_code
+fi
+
+if [ "$CUSTOMIZE_INITRD" = "yes" ]; then
+	echo "Running initrd customization script $CUSTOMIZE_DIR/customize_initrd..."
+	"$CUSTOMIZE_DIR/customize_initrd" "$REMASTER_HOME"
+	check_exit_code
+	echo "Initrd customization script finished"
+fi
+
+###########
+# packing #
+###########
+
+if [ "$CUSTOMIZE_INITRD" = "yes" ] ; then
+	$SCRIPTS_DIR/uck-remaster-pack-initrd "$REMASTER_HOME"
+	check_exit_code
+fi
+
+if [ "$CUSTOMIZE_ROOTFS" = "yes" ] ; then
+	if [ "$CLEAN_DESKTOP_MANIFEST" = "yes" ]; then
+		$SCRIPTS_DIR/uck-remaster-pack-rootfs -c "$REMASTER_HOME"
+	else
+		$SCRIPTS_DIR/uck-remaster-pack-rootfs "$REMASTER_HOME"
+	fi
+	check_exit_code
+fi
+
+if [ "$HYBRID" = "yes" ] ; then
+	HYBRID="-h"
+else
+	HYBRID=""
+fi
+
+$SCRIPTS_DIR/uck-remaster-pack-iso "livecd.iso" "$REMASTER_HOME" $HYBRID
+check_exit_code
+
+#############
+# finishing #
+#############
+
+if [ "$COPY_CUSTOMIZE_DIR" = "yes" ]; then
+	# since we copied the customization-scripts dir from outside
+	# can can safely remove it to leave the REMASTER_HOME as it was
+	# at the beginning of the process
+	rm -rf "$REMASTER_HOME/customization-scripts"
+	check_exit_code
+fi
+
+$SCRIPTS_DIR/uck-remaster-clean "$REMASTER_HOME"
+check_exit_code
+
+echo "Generation completed SUCCESSFULLY, find your ISO in $REMASTER_HOME/remaster-new-files"
+exit 0

@@ -1,0 +1,160 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+function prepare_install()
+{
+	#try 2 times to avoid slow proxies failures
+	apt-get update || apt-get update || failure "apt-get update failed, error=$?"
+}
+
+function install_packages()
+{
+	apt-get install --assume-yes --force-yes "$@" || failure "apt-get install $@ failed, error=$?"
+}
+
+function remove_packages()
+{
+	apt-get --purge remove --assume-yes --force-yes "$@" || failure "apt-get remove $@ failed, error=$?"
+}
+
+function run_console()
+{
+	echo "Starting console application..."
+	
+	CONSOLE_APP=`which konsole`
+	CONSOLE_APP_OPTIONS=(--caption "UCK customization console" -e /bin/bash)
+	if [ "$CONSOLE_APP" = "" ]; then
+		CONSOLE_APP=`which gnome-terminal`
+		CONSOLE_APP_OPTIONS=(-t "UCK customization console" -e /bin/bash)
+	fi
+	if [ "$CONSOLE_APP" = "" ]; then
+		CONSOLE_APP=`which xfce4-terminal`
+		CONSOLE_APP_OPTIONS=(-T "UCK customization console" -e /bin/bash)
+	fi
+	if [ "$CONSOLE_APP" = "" ]; then
+		CONSOLE_APP=`which lxterminal`
+		CONSOLE_APP_OPTIONS=(-t "UCK customization console" -e /bin/bash)
+	fi
+	if [ "$CONSOLE_APP" = "" ]; then
+		CONSOLE_APP=`which xterm`
+		CONSOLE_APP_OPTIONS=(-title "UCK customization console" -e /bin/bash)
+	fi
+	
+	if [ "$CONSOLE_APP" = "" ]; then
+		dialog_msgbox "Failure" "Unable to find any console application"
+	else
+		eval `dbus-launch --sh-syntax --exit-with-session 2>/dev/null`
+		$CONSOLE_APP "${CONSOLE_APP_OPTIONS[@]}"
+		RESULT=$?
+	fi
+}
+
+SCRIPT_DIR=`dirname "$0"`
+. "$SCRIPT_DIR/gui.sh"
+
+# Inherit environment
+[ -f "$SCRIPT_DIR/environment" ] &&
+	. "$SCRIPT_DIR/environment"
+
+LIVECD_LANGS=`cat "$SCRIPT_DIR/language_packs"`
+RUN_MANUAL_CUSTOMIZATIONS=`cat "$SCRIPT_DIR/run_manual_customizations"`
+DESKTOP_TYPE=`cat "$SCRIPT_DIR/desktop_type"`
+
+DESKTOP_FLAVOURS=`cat "$SCRIPT_DIR/desktop_types"`
+
+# Print some information on the system being customized:
+rel="`lsb_release -is` `lsb_release -rs`"
+kernel=`ls /boot/config-* | sed 's/.*config-//'`
+arch=`if [ -d /lib64 ]; then echo x86_64; else echo i586; fi`
+echo ">> Customizing: $rel, $kernel $arch"
+
+prepare_install || failure "Preparing installation failed, error=$?"
+
+# List of packages to install to support the selected languages:
+PACKAGES_TO_INSTALL=""
+# Pattern to match all selected language packs:
+LANGPACKS_CONCATENATED=""
+# List of language related packages available in the repositories:
+REPO_LANGS=`apt-cache search "^language-" | sed 's/[ 	].*//'`
+
+echo "Installing language packs ($LIVECD_LANGS)..."
+if [ -n "$LIVECD_LANGS" ]; then
+	for l in $LIVECD_LANGS; do
+		# Add language specific packages not releated to kde or gnome
+		add=`echo "$REPO_LANGS" | grep -- -"$l" | grep -Ev "kde|gnome"`
+		PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $add"
+	
+		# Add desktop specific language packages
+		if [ -n "$DESKTOP_FLAVOURS" ]; then
+			for f in $DESKTOP_FLAVOURS; do
+				add=`echo "$REPO_LANGS" | grep -- -$f-$l`
+				PACKAGES_TO_INSTALL="$PACKAGES_TO_INSTALL $add"
+			done
+		fi
+	
+		if [ -z "$LANGPACKS_CONCATENATED" ]; then
+			LANGPACKS_CONCATENATED="$l"
+		else
+			LANGPACKS_CONCATENATED="$LANGPACKS_CONCATENATED|$l"
+		fi
+	done
+	
+	install_packages $PACKAGES_TO_INSTALL ||
+		failure "Installing language packs failed, error=$?"
+	
+	# NOTE:	we first install selected language packs, then remove others as
+	#	installing a language pack might pull in packages that were not
+	#	previously present
+	echo "Removing unnecessary language packages..."
+	REMOVED_PACKAGES=`dpkg-query --show | cut -f1 | grep -E '^(language-pack|language-support|firefox-locale)' | grep -Ev "[-]($LANGPACKS_CONCATENATED)\>"`
+	remove_packages $REMOVED_PACKAGES ||
+		failure "Removing packages failed, error=$?"
+fi
+
+if [ "$RUN_MANUAL_CUSTOMIZATIONS" = "yes" ] ; then
+	while true ; do
+		CHOICE_CONSOLE="Run console application"
+		CHOICE_EXIT="Continue building"
+		CHOICE=`dialog_menu "Please choose customization action" "$CHOICE_CONSOLE" "$CHOICE_EXIT"`
+		RESULT=$?
+
+		if [ -z $CHOICE ] ; then
+			failure "Script cancelled by user"
+		fi
+		#workaround for KDE bug (https://bugs.kde.org/show_bug.cgi?id=139025)
+		CHOICE=`echo "$CHOICE" | grep -v -i kwrited | tail -n1`
+
+		echo "CHOICE='$CHOICE'"
+
+		if [ "$CHOICE" = "$CHOICE_EXIT" ] ; then
+			break
+		elif [ "$CHOICE" = "$CHOICE_CONSOLE" ] ; then
+			run_console
+		fi
+	done
+fi
+
+echo "Done"

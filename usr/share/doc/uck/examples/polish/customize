@@ -1,0 +1,57 @@
+#!/bin/bash
+#install polish language packs
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+function prepare_install()
+{
+	apt-get update
+}
+
+function install_packages()
+{
+	apt-get install --assume-yes --force-yes "$@"
+}
+
+function remove_packages()
+{
+	apt-get --purge remove --assume-yes --force-yes "$@"
+}
+
+prepare_install
+echo "Installing language pack..."
+install_packages language-pack-pl language-support-pl language-pack-kde-pl myspell-dictionary-pl openoffice.org-hyphenation-pl   openoffice.org-thesaurus-pl openoffice.org-help-pl
+#REMOVED_PACKAGES="language-pack-en language-support-en language-pack-kde-en language-pack-kde-en-base \
+#	wamerican wbritish mozilla-firefox-locale-en-gb myspell-en-gb myspell-en-us \
+#	aspell-en \"
+#	openoffice.org-thesaurus-en-us openoffice.org-l10n-en-gb openoffice.org-l10n-en-za"
+
+#REMOVED_PACKAGES=`dpkg-query --show | cut -f1 | grep '^language-'`
+
+#Remove language packs apart from Polish and English.
+echo "Removing packages..."
+#NOTE: we first install language pack, then remove others as installing language pack might pull packages 
+#which were not previously present
+echo "Removing unnecessary language packages..."
+LANGPACKS_CONCATENATED=pl
+REMOVED_PACKAGES=`dpkg-query --show | cut -f1 | grep -E '^(language-pack|language-support)' | grep -v -E "[-]($LANGPACKS_CONCATENATED)\>"`
+remove_packages $REMOVED_PACKAGES || failure "Removing packages failed, error=$?"
+
+echo "Done"
+#Removing openoffice.org-l10n-en-us uninstalls Openoffice

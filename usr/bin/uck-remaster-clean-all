@@ -1,0 +1,59 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 [remaster-dir]"
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+
+# Input parameter check
+if [ $# -ne 1 ]; then
+	usage
+elif [ ! -d "$1" -o ! -d "$1/customization-scripts" ]; then
+	failure "$1 is not a UCK remaster directory"
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null ||
+	. /usr/lib/uck/remaster-live-cd.sh 2>/dev/null ||
+	failure "libraries not found"
+
+# If the r/w mount methods exist run them first.
+[ -x /usr/bin/uck-remaster-umount ] &&
+	uck-remaster-umount "$1"
+
+rm -rf "$1/remaster-"*

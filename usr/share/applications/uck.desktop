@@ -1,0 +1,17 @@
+[Desktop Entry]
+Name=Ubuntu Customization Kit
+GenericName=Ubuntu Desktop CD Customizer
+Comment=Customize your Ubuntu Desktop CDs easily
+
+Icon=uck
+
+Exec=uck-gui --wait-before-exit
+Terminal=true
+
+Categories=System;
+StartupNotify=true
+Type=Application
+Version=1.0
+X-DCOP-ServiceType=none
+X-KDE-SubstituteUID=false
+X-KDE-Username=

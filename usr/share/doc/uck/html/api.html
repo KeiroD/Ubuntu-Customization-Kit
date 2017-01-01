@@ -1,0 +1,113 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
+  <title>Ubuntu Customization Kit</title>
+</head>
+<body>
+<h1>Ubuntu Customization Kit</h1>
+
+<h2>The remastering backend</h2>
+<p>UCK has several utility scripts to allow you a flexible remastering, here
+you can find the complete list (in logical order):</p>
+<ul>
+	<li><a href="#uck-remaster-unpack-iso">uck-remaster-unpack-iso</a></li>
+	<li><a href="#uck-remaster-unpack-rootfs">uck-remaster-unpack-rootfs</a></li>
+	<li><a href="#uck-remaster-unpack-initrd">uck-remaster-unpack-initrd</a></li>
+	<li><a href="#uck-remaster-chroot-rootfs">uck-remaster-chroot-rootfs</a></li>
+	<li><a href="#uck-remaster-prepare-alternate">uck-remaster-prepare-alternate</a></li>
+	<li><a href="#uck-remaster-finalize-alternate">uck-remaster-finalize-alternate</a></li>
+	<li><a href="#uck-remaster-remove-win32-files">uck-remaster-remove-win32-files</a></li>
+	<li><a href="#uck-remaster-pack-initrd">uck-remaster-pack-initrd</a></li>
+	<li><a href="#uck-remaster-pack-rootfs">uck-remaster-pack-rootfs</a></li>
+	<li><a href="#uck-remaster-pack-iso">uck-remaster-pack-iso</a></li>
+	<li><a href="#uck-remaster-clean">uck-remaster-clean</a></li>
+	<li><a href="#uck-remaster-clean-all">uck-remaster-clean-all</a></li>
+</ul>
+
+<a name="uck-remaster-chroot-rootfs"></a>
+<h3>uck-remaster-unpack-iso</h3>
+
+<p>Usage:
+<pre># uck-remaster-unpack-iso iso-file.iso [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-unpack-rootfs"></a>
+<h3>uck-remaster-unpack-rootfs</h3>
+
+<p>Usage:
+<pre># uck-remaster-unpack-rootfs [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-unpack-initrd"></a>
+<h3>uck-remaster-unpack-initrd</h3>
+
+<p>Usage:
+<pre># uck-remaster-unpack-initrd [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-chroot-rootfs"></a>
+<h3>uck-remaster-chroot-rootfs</h3>
+
+<p>Usage:
+<pre># uck-remaster-chroot-rootfs [remaster-dir] [what-to-execute]</pre>
+</p>
+
+<a name="uck-remaster-prepare-alternate"></a>
+<h3>uck-remaster-prepare-alternate</h3>
+
+<p>Usage:
+<pre># uck-remaster-prepare-alternate [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-finalize-alternate"></a>
+<h3>uck-remaster-finalize-alternate</h3>
+
+<p>Usage:
+<pre># uck-remaster-finalize-alternate gpg-key-id [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-remove-win32-files"></a>
+<h3>uck-remaster-remove-win32-files</h3>
+
+<p>Usage:
+<pre># uck-remaster-remove-win32-files [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-pack-initrd"></a>
+<h3>uck-remaster-pack-initrd</h3>
+
+<p>Usage:
+<pre># uck-remaster-pack-initrd [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-pack-rootfs"></a>
+<h3>uck-remaster-pack-rootfs</h3>
+
+<p>Usage:
+<pre># uck-remaster-pack-rootfs [remaster-dir] [-c|--clean-desktop-manifest]</pre>
+</p>
+
+<a name="uck-remaster-pack-iso"></a>
+<h3>uck-remaster-pack-iso</h3>
+
+<p>Usage:
+<pre># uck-remaster-pack-iso [iso-file-name.iso] [remaster-dir] [-h|--hybrid] [-g|--generate-md5] [-a|--arch=x86,x86_64,ia64,ppc]  [-d|--description=CD_description]</pre>
+</p>
+
+<a name="uck-remaster-clean"></a>
+<h3>uck-remaster-clean</h3>
+
+<p>Usage:
+<pre># uck-remaster-clean [remaster-dir]</pre>
+</p>
+
+<a name="uck-remaster-clean-all"></a>
+<h3>uck-remaster-clean-all</h3>
+
+<p>Usage:
+<pre># uck-remaster-clean-all [remaster-dir]</pre>
+</p>
+
+</body>
+</html>

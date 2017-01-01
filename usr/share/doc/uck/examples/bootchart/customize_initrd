@@ -1,0 +1,33 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+REMASTER_HOME=$1
+REMASTER_DIR="$REMASTER_HOME/remaster-root"
+INITRD_REMASTER_DIR="$REMASTER_HOME/remaster-initrd"
+
+echo "Using REMASTER_DIR=$REMASTER_DIR, INITRD_REMASTER_DIR=$INITRD_REMASTER_DIR"
+
+#copy bootchart initramfs script
+cp -vf "$REMASTER_DIR/usr/share/initramfs-tools/scripts/init-top/bootchart" "$INITRD_REMASTER_DIR/scripts/init-top/"
+RESULT=$?
+if [ $RESULT -ne 0 ]; then
+	echo "Failed to copy $REMASTER_DIR/usr/share/initramfs-tools/scripts/init-top/bootchart to $INITRD_REMASTER_DIR/scripts/init-top/"
+	exit 4
+fi

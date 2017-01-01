@@ -1,0 +1,233 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+KEY_ID="$1"
+REMASTER_HOME="$2"
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 gpg-key-id [remaster-dir]"
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+
+if [ -z "$KEY_ID" ]; then
+	usage
+	exit 1
+fi
+
+if [ -z "$REMASTER_HOME" ]; then
+	REMASTER_HOME=~/tmp
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null || . /usr/lib/uck/remaster-live-cd.sh 2>/dev/null || failure "libraries not found"
+
+ISO_REMASTER_DIR="$REMASTER_HOME/remaster-iso"
+REMASTER_ALT_TMP="$REMASTER_HOME/remaster-alt-tmp"
+
+if [ ! -e "$ISO_REMASTER_DIR" ]; then
+	failure "ISO remastering directory does not exists"
+fi
+
+##########################
+# detecting architecture #
+##########################
+
+if [ ! -d "$ISO_REMASTER_DIR"/dists/stable/main ]; then
+	ARCH=$(ls $ISO_REMASTER_DIR/dists/stable/main | grep binary | cut -d \- -f2 | head -1)
+else
+	ARCH=$(ls "$ISO_REMASTER_DIR"/install/netboot/ubuntu-installer/)
+fi
+
+############################
+# creating pool structures #
+############################
+
+mkdir -p $ISO_REMASTER_DIR/dists/stable/extras/binary-$ARCH $ISO_REMASTER_DIR/pool/extras
+mkdir -p $REMASTER_ALT_TMP/keyring
+mkdir -p $REMASTER_ALT_TMP/indices
+
+#####################################
+# creating realease file for extras #
+#####################################
+
+cat $ISO_REMASTER_DIR/dists/stable/main/binary-$ARCH/Release | sed 's/Component: main/Component: extras/' > $ISO_REMASTER_DIR/dists/stable/extras/binary-$ARCH/Release
+
+##############################
+# detecting release codename #
+##############################
+
+cd $ISO_REMASTER_DIR/dists
+RELEASE_CODENAME=`find stable -printf %l`
+
+#######################
+# downloading indices #
+#######################
+
+cd $REMASTER_ALT_TMP/indices
+wget -c http://archive.ubuntu.com/ubuntu/indices/override.$RELEASE_CODENAME.{extra.main,main,main.debian-installer,restricted,restricted.debian-installer}
+
+#############################
+# processing ubuntu-keyring #
+#############################
+
+cd $REMASTER_ALT_TMP/keyring
+apt-get source ubuntu-keyring
+cd ubuntu-keyring-*/keyrings
+gpg --import < ubuntu-archive-keyring.gpg
+PACKAGE_SIGN=`gpg --list-keys $KEY_ID | grep uid | sed 's/uid *//'`
+gpg --export FBB75451 437D05B5 $KEY_ID > ubuntu-archive-keyring.gpg
+cd ..
+dpkg-buildpackage -rfakeroot -m"$PACKAGE_SIGN" -k$KEY_ID
+cd ..
+cp ubuntu-keyring*deb $ISO_REMASTER_DIR/pool/main/u/ubuntu-keyring
+
+#######################
+# generating apt.conf #
+#######################
+
+cat $ISO_REMASTER_DIR/dists/$RELEASE_CODENAME/Release | egrep -v "^ " | egrep -v "^(Date|MD5Sum|SHA1|SHA256)" | sed 's/: / "/' | sed 's/^/APT::FTPArchive::Release::/' | sed 's/$/";/' > $REMASTER_ALT_TMP/apt.conf
+
+######################################
+# generating apt-ftparchive-deb.conf #
+######################################
+
+echo "Dir {
+  ArchiveDir \"$ISO_REMASTER_DIR\";
+};
+
+TreeDefault {
+  Directory \"pool/\";
+};
+
+BinDirectory \"pool/main\" {
+  Packages \"dists/$RELEASE_CODENAME/main/binary-$ARCH/Packages\";
+  BinOverride \"$REMASTER_ALT_TMP/indices/override.$RELEASE_CODENAME.main\";
+  ExtraOverride \"$REMASTER_ALT_TMP/indices/override.$RELEASE_CODENAME.extra.main\";
+};
+
+BinDirectory \"pool/restricted\" {
+ Packages \"dists/$RELEASE_CODENAME/restricted/binary-$ARCH/Packages\";
+ BinOverride \"$REMASTER_ALT_TMP/indices/override.$RELEASE_CODENAME.restricted\";
+};
+
+Default {
+  Packages {
+    Extensions \".deb\";
+    Compress \". gzip\";
+  };
+};
+
+Contents {
+  Compress \"gzip\";
+};" > $REMASTER_ALT_TMP/apt-ftparchive-deb.conf
+
+#######################################
+# generating apt-ftparchive-udeb.conf #
+#######################################
+
+echo "Dir {
+  ArchiveDir \"$ISO_REMASTER_DIR\";
+};
+
+TreeDefault {
+  Directory \"pool/\";
+};
+
+BinDirectory \"pool/main\" {
+  Packages \"dists/$RELEASE_CODENAME/main/debian-installer/binary-$ARCH/Packages\";
+  BinOverride \"$REMASTER_ALT_TMP/indices/override.$RELEASE_CODENAME.main.debian-installer\";
+};
+
+BinDirectory \"pool/restricted\" {
+  Packages \"dists/$RELEASE_CODENAME/restricted/debian-installer/binary-$ARCH/Packages\";
+  BinOverride \"$REMASTER_ALT_TMP/indices/override.$RELEASE_CODENAME.restricted.debian-installer\";
+};
+
+Default {
+  Packages {
+    Extensions \".udeb\";
+    Compress \". gzip\";
+  };
+};
+
+Contents {
+  Compress \"gzip\";
+};" > $REMASTER_ALT_TMP/apt-ftparchive-udeb.conf
+
+#########################################
+# generating apt-ftparchive-extras.conf #
+#########################################
+
+echo "Dir {
+  ArchiveDir \"$ISO_REMASTER_DIR\";
+};
+
+TreeDefault {
+  Directory \"pool/\";
+};
+
+BinDirectory \"pool/extras\" {
+  Packages \"dists/$RELEASE_CODENAME/extras/binary-$ARCH/Packages\";
+};
+
+Default {
+  Packages {
+    Extensions \".deb\";
+    Compress \". gzip\";
+  };
+};
+
+Contents {
+  Compress \"gzip\";
+};" > $REMASTER_ALT_TMP/apt-ftparchive-extras.conf
+
+##########################
+# running apt-ftparchive #
+##########################
+
+cd $ISO_REMASTER_DIR
+apt-ftparchive -c $REMASTER_ALT_TMP/apt.conf generate $REMASTER_ALT_TMP/apt-ftparchive-deb.conf
+apt-ftparchive -c $REMASTER_ALT_TMP/apt.conf generate $REMASTER_ALT_TMP/apt-ftparchive-udeb.conf
+apt-ftparchive -c $REMASTER_ALT_TMP/apt.conf generate $REMASTER_ALT_TMP/apt-ftparchive-extras.conf
+apt-ftparchive -c $REMASTER_ALT_TMP/apt.conf release dists/$RELEASE_CODENAME/ > dists/$RELEASE_CODENAME/Release
+
+###################
+# signing release #
+###################
+
+rm -f $ISO_REMASTER_DIR/dists/$RELEASE_CODENAME/Release.gpg
+gpg --default-key "$KEY_ID" --output $ISO_REMASTER_DIR/dists/$RELEASE_CODENAME/Release.gpg -ba $ISO_REMASTER_DIR/dists/$RELEASE_CODENAME/Release

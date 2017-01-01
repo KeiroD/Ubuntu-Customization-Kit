@@ -1,0 +1,110 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 [iso-file-name.iso] [remaster-dir] [-h|--hybrid] [-g|--generate-md5] [-a|--arch=x86,x86_64,ia64,ppc] [-d|--description=CD_description]"
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+
+ARCH="x86"
+GENERATE_MD5_FOR_NEW_ISO=0
+HYBRID=0
+DESCRIPTION="Remastered Ubuntu LiveCD"
+
+INPUT_PARAMS=`getopt -o d:hga: -l description:,generate-md5,arch: -n "$0" -- "$@"`
+
+if [ $? != 0 ] ; then
+	exit 1
+fi
+
+eval set -- "$INPUT_PARAMS"
+while :; do
+  case "$1" in
+        -h|--hybrid) shift;HYBRID=1;;
+        -g|--generate-md5) shift;GENERATE_MD5_FOR_NEW_ISO=1;;
+        -a|--arch) shift; ARCH=$1; shift;;
+	-d|--description) shift; DESCRIPTION="$1"; shift;;
+        --) shift; break;;
+  esac
+done
+
+NEW_ISO_FILE_NAME=$1
+if [ -z "$NEW_ISO_FILE_NAME" ]; then
+	NEW_ISO_FILE_NAME="livecd.iso"
+fi
+NEW_ISO_DIR_NAME=`dirname "$NEW_ISO_FILE_NAME"`
+NEW_ISO_FILE_NAME=`basename "$NEW_ISO_FILE_NAME"`
+
+REMASTER_HOME=$2
+if [ -z "$2" ]; then
+	REMASTER_HOME=~/tmp
+fi
+
+if [ "$ARCH" != "x86" ] && [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "ia64" ] && [ "$ARCH" != "ppc" ]; then
+	failure "Chosen architecture is not valid (x86, x86_64, ia64, ppc)"
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null || . /usr/lib/uck/remaster-live-cd.sh 2>/dev/null || failure "libraries not found"
+
+NEW_FILES_DIR="$REMASTER_HOME/remaster-new-files"
+INITRD_REMASTER_DIR="$REMASTER_HOME/remaster-initrd"
+ISO_REMASTER_DIR="$REMASTER_HOME/remaster-iso"
+REMASTER_DIR="$REMASTER_HOME/remaster-root"
+CUSTOMIZE_DIR="$REMASTER_HOME/customization-scripts"
+
+if [ ! -e "$ISO_REMASTER_DIR" ]; then
+	failure "ISO remastering directory $ISO_REMASTER_DIR does not exists"
+fi
+
+prepare_new_files_directories ||
+	failure "Cannot create directory for new files"
+pack_iso "$ARCH" "$DESCRIPTION" ||
+	failure "Cannot pack ISO"
+
+if [ $GENERATE_MD5_FOR_NEW_ISO = 1 ]; then
+	generate_md5_for_new_iso ||
+		failure "Cannot generate md5sum for new ISO"
+fi
+
+if [ "$NEW_ISO_DIR_NAME" != "." ]
+then
+	mv "$NEW_FILES_DIR/$NEW_ISO_FILE_NAME" "$NEW_ISO_DIR_NAME/$NEW_ISO_FILE_NAME" ||
+		failure "Cannot move $NEW_ISO_FILE_NAME to $NEW_ISO_DIR_NAME"
+fi
+
+exit 0

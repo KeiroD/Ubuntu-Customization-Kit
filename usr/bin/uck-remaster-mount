@@ -1,0 +1,84 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+SOURCE="$1"
+REMASTER_HOME="$2"
+
+#############################
+# general purpose functions #
+#############################
+
+function usage()
+{
+	echo "Usage: $0 source.iso [remaster-dir]"
+	exit 1
+}
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+#########################
+# input parameter check #
+#########################
+
+if [ -z "$REMASTER_HOME" ]; then
+	REMASTER_HOME=~/tmp
+fi
+
+if [ -z "$SOURCE" ]; then
+	usage
+fi
+
+########
+# main #
+########
+
+. libraries/remaster-live-cd.sh 2>/dev/null ||
+	. /usr/lib/uck/remaster-live-cd.sh 2>/dev/null ||
+	failure "libraries not found"
+
+check_union_mounts ||
+	failure "Cannot use union mounts - no OS support found"
+
+# Check arguments
+case "$REMASTER_HOME" in
+/*)	: ok - has absolute path;;
+*)	failure "remaster-dir argument must be absolute path";;
+esac
+
+# Mount r/w copy of iso
+if mountpoint "$REMASTER_HOME/remaster-iso"; then
+	: do nothing - is already mounted
+else
+	union_mount "$SOURCE" "$REMASTER_HOME/remaster-iso" ||
+		failure "Can't union_mount $REMASTER_HOME/remaster-iso"
+fi
+
+# Mount r/W copy of rootfs on iso
+if mountpoint "$REMASTER_HOME/remaster-root"; then
+	: do nothing - is already mounted
+else
+	union_mount "$REMASTER_HOME/remaster-iso-mount/casper/filesystem.squashfs" \
+			"$REMASTER_HOME/remaster-root" ||
+		failure "Can't union_mount $REMASTER_HOME/remaster-root"
+fi

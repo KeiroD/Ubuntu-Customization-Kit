@@ -1,0 +1,8 @@
+Document: uck
+Title: Ubuntu Customization Kit documentation
+Abstract: Documentation reference for Ubuntu Customization Kit.
+Section: System/Administration
+
+Format: HTML
+Index: /usr/share/doc/uck/html/index.html
+Files: /usr/share/doc/uck/html/*

@@ -1,0 +1,191 @@
+#!/bin/bash
+
+###################################################################################
+# UCK - Ubuntu Customization Kit                                                  #
+# Copyright (C) 2006-2010 UCK Team                                                #
+#                                                                                 #
+# UCK is free software: you can redistribute it and/or modify                     #
+# it under the terms of the GNU General Public License as published by            #
+# the Free Software Foundation, either version 3 of the License, or               #
+# (at your option) any later version.                                             #
+#                                                                                 #
+# UCK is distributed in the hope that it will be useful,                          #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                  #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                   #
+# GNU General Public License for more details.                                    #
+#                                                                                 #
+# You should have received a copy of the GNU General Public License               #
+# along with UCK.  If not, see <http://www.gnu.org/licenses/>.                    #
+###################################################################################
+
+# NAME:
+#    customize_iso -- customize iso image outside of root FS
+#
+# SYNOPSIS:
+#    customize_iso [remaster_home] [customization_scripts_dir]
+#
+# DESCRIPTION:
+#    This procedure performs additional customization that needs to
+#    happen outside of the image of the root file system:
+#        - Configuration of the boot environment
+#            - isolinux configuration
+#            - gfxboot configuration (language/keyboard support!)
+#            - propagation of a new kernel/initrd
+#            - Simple bootmanager (directory "install" in image)
+#        - Configuration of additional resources outside the root FS
+#            - Add-Ons (like sample document/music/video files)
+#            - More Add-Ons (like OSS for Win / Mac)
+#
+# NOTES:
+#    Execution of the procedure may require Internet access to download
+#    the source of the latest version gfxboot-theme-ubuntu.
+#
+#    If a local copy of gfxboot-theme-ubuntu is available in the remaster
+#    home, it will be used instead of a (possibly updated) download.
+
+SCRIPT_DIR=`dirname "$0"`
+REMASTER_HOME=${1:-~/tmp}
+SCRIPT_DIR=${2-$REMASTER_HOME/customization-scripts}
+ISO_REMASTER_DIR="$REMASTER_HOME/remaster-iso"
+REMASTER_DIR="$REMASTER_HOME/remaster-root"
+BOOT_LANG=`cat "$SCRIPT_DIR/livecd_locale"`
+
+function failure()
+{
+	echo "$@"
+	exit 1
+}
+
+function get_latest_kernel()
+{
+	set -- $(ls "$REMASTER_DIR"/boot/vmlinuz* 2>/dev/null |
+		sed -e "s@$REMASTER_DIR/boot/@@" |
+		tr --  '-.' '\t' |
+		sort --key=2 --key=3 --key=4  --key=5 --numeric-sort |
+		tail -n1 )
+	[ "$1" = "vmlinuz" ] && echo "$REMASTER_DIR/boot/$1-$2.$3.$4-$5-$6"
+}
+
+# Create a temporary directory to assemble the gfxboot stuff in
+BUILD_DIR=`mktemp -d`
+if [ -d $REMASTER_HOME/gfxboot-theme-ubuntu ]
+then
+	cp -r $REMASTER_HOME/gfxboot-theme-ubuntu "$BUILD_DIR" ||
+		failure "Cannot copy gfxboot-theme-ubuntu to $BUILD_DIR"
+	pushd "$BUILD_DIR" >/dev/null ||
+		failure "Cannot change directory to $BUILD_DIR"
+else
+	pushd "$BUILD_DIR" >/dev/null ||
+		failure "Cannot change directory to $BUILD_DIR"
+	DISTRO_CODENAME=`cd "$ISO_REMASTER_DIR"/dists && find . -maxdepth 1 -type d | grep '/' | cut -d '/' -f2` ||
+		failure "Unable to identify Ubuntu distro codename"
+	APT_SOURCES_TMP_DIR=`mktemp -d`
+	wget -c http://archive.ubuntu.com/ubuntu/ubuntu/ubuntu/dists/$DISTRO_CODENAME/main/source/Sources.gz -O "$APT_SOURCES_TMP_DIR"/Sources.gz
+	GFXBOOT_THEME_UBUNTU_SOURCE_PACKAGE=http://archive.ubuntu.com/ubuntu/ubuntu/ubuntu/pool/main/g/gfxboot-theme-ubuntu/$(zgrep gz "$APT_SOURCES_TMP_DIR"/Sources.gz | grep gfxboot-theme-ubuntu | sed -n 1p | awk '{ print $3 }')
+	wget $GFXBOOT_THEME_UBUNTU_SOURCE_PACKAGE ||
+		failure "Unable to download gfxboot-theme-ubuntu source package from $GFXBOOT_THEME_UBUNTU_SOURCE_PACKAGE"
+	tar xfz *.tar.gz ||
+		failure "Unable to extract gfxboot-theme-ubuntu source package"
+fi
+
+# Build the gfx boot theme
+cd gfxboot-theme-ubuntu
+cd po
+ln -s pt.po pt_PT.po
+cd ..
+##if [ "$BOOT_LANG" = "pt_PT" ]; then
+##	make DEFAULT_LANG="pt" || failure "Failed to build gfxboot theme"
+##else
+	make DEFAULT_LANG="$BOOT_LANG" || failure "Failed to build gfxboot theme"
+##fi
+
+# Fix list of languages
+pushd boot >/dev/null
+
+# Create regexp that matches all language packs on CD
+langpack=""
+for langpack in `cat "$SCRIPT_DIR/language_packs"`; do
+	if [ -z "$LANGPACKS" ]; then
+		LANGPACKS="$langpack"
+	else
+		LANGPACKS="$LANGPACKS|$langpack"
+	fi
+done
+
+# Rewrite langlist
+cat "$SCRIPT_DIR/livecd_locales" >langlist
+popd >/dev/null
+
+# Copy to isolinux in image directory
+cp -af boot/* "$ISO_REMASTER_DIR/isolinux/" ||
+	failure "Error while copying boot files to $ISO_REMASTER_DIR/isolinux"
+
+popd >/dev/null
+
+# Cleanup
+[ "$BUILD_DIR" != "/" ] && rm -rf "$BUILD_DIR"
+
+# Copy kernel and initrd, in case it was changed during installation
+VMLINUZ=$(get_latest_kernel)
+if [ "$VMLINUZ" != "" ]
+then
+	INITRD="$REMASTER_DIR"/boot/initrd.img-$(echo `basename $VMLINUZ` | cut -d'-' -f 2-)
+	if [ -e "$VMLINUZ" -a -e "$INITRD" ]
+	then
+		echo "Updating kernel:"
+		echo "	kernel=$VMLINUZ"
+		echo "	initrd=$INITRD"
+		cp -f "$VMLINUZ" "$ISO_REMASTER_DIR/casper/vmlinuz"
+		cp -f "$INITRD" "$ISO_REMASTER_DIR/casper/initrd.gz"
+	else
+		echo "Not updating kernel as initrd not present"
+	fi
+fi
+
+# Misc fixup for Karmic
+pushd "$ISO_REMASTER_DIR"/isolinux >/dev/null
+
+# What used to be called "message" is now called "bootlogo"
+if [ -f isolinux.cfg -a -n "`grep "gfxboot bootlogo" isolinux.cfg 2>/dev/null`" ]
+then
+	if [ -f message ]
+	then
+		echo "Using bootlogo instead of message"
+		mv message bootlogo
+	fi
+fi
+
+# What used to be a gzipped initrd now is a lzma compressed initrd
+if [ -f text.cfg ] || [ -f txt.cfg ]
+then
+	# At least one of the .cfg file will be missing. Drop error message.
+	lzused=`grep initrd.lz text.cfg txt.cfg 2>/dev/null`
+	lzmacmd=`which lzma`
+	if [ -n "$lzused" ]
+	then
+		if [ -n "$lzmacmd" ]
+		then
+			if [ -f ../casper/initrd.gz ]
+			then
+				pushd "$ISO_REMASTER_DIR"/casper >/dev/null
+				echo "Recompressing initrd from gzip to lzma"
+				rm -f initrd.lz
+				gunzip <initrd.gz | $lzmacmd >initrd.lz
+				rm -f initrd.gz
+				popd >/dev/null
+			fi
+		else
+			if [ -f ../casper/initrd.gz ]
+			then
+				echo "lzma command not installed"
+				echo "Switching permanently to gzipped initrd"
+				sed -i -e 's/initrd\.lz/initrd.gz/g' text.cfg txt.cfg
+				rm -f ../casper/initrd.lz
+			else
+				: do nothing - no initrd.gz
+			fi
+		fi
+	else
+		: do nothing - initrd.lz not used
+	fi
+fi
