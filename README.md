@@ -3,7 +3,7 @@ An old copy of the Ubuntu Customization Kit from https://sourceforge.net/project
 
 ## Prequisite
 
-A very important prequisite is to install `libfribidi-bin` (`apt install libfribidi-bin`). It is a required dependency that is not present in the uck package. If you don't install it, your custom build will fail with an error when it is almost finished, with a "Failed to build gfxboot theme" error. This is is a bug going back to 12.04 or earlier, so sigh and deal with it, for the time being until someone figures this particular bug out.
+A very important prequisite is to install `libfribidi-bin` (`apt install libfribidi-bin`). It is a required dependency that is not present in the `uck` package. If you don't install it, your custom build will fail with an error when it is almost finished, with a "Failed to build gfxboot theme" error. This is is a bug going back to 12.04 or earlier, so sigh and deal with it, for the time being until someone figures this particular bug out.
 
 ## How to Install UCK
 
